@@ -1,0 +1,91 @@
+import cv2
+import numpy as np
+
+# Defined colors.
+lower_red1 = np.array([0, 100, 100])
+upper_red1 = np.array([10, 255, 255])
+
+lower_red2 = np.array([160, 100, 100])
+upper_red2 = np.array([180, 255, 255])
+
+lower_green = np.array([40, 40, 40])
+upper_green = np.array([80, 255, 255])
+
+lower_blue = np.array([100, 50, 50])
+upper_blue = np.array([130, 255, 255])
+
+# Can Change these
+lower_target_color = np.array([0, 70, 50]) 
+upper_target_color = np.array([10, 255, 255]) 
+
+
+cap = cv2.VideoCapture(0)
+
+if not cap.isOpened():
+    print("Error: Could not open video stream or file.")
+    exit()
+
+# Tracking loop
+while True:
+    # Reads fram from video
+    ret, frame = cap.read() 
+
+    if not ret:
+        print("Error")
+        break
+
+    # Convert to HSV
+    hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # Mask
+    mask = cv2.inRange(hsv_frame, lower_target_color, upper_target_color)
+
+    # noise Reduc
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.erode(mask, kernel, iterations=1)
+    mask = cv2.dilate(mask, kernel, iterations=1)
+
+    # Contours
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Filter
+    if contours:
+        largest_contour = max(contours, key=cv2.contourArea)
+        min_contour_area = 500
+
+        if cv2.contourArea(largest_contour) > min_contour_area:
+            # Bounding Box
+            M = cv2.moments(largest_contour)
+
+            if M["m00"] != 0:
+                cX = int(M["m10"] / M["m00"]) 
+                cY = int(M["m01"] / M["m00"]) 
+
+                x, y, w, h = cv2.boundingRect(largest_contour)
+
+                # Display
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2) # Green rectangle
+
+                # Draw a circle
+                cv2.circle(frame, (cX, cY), 7, (0, 0, 255), -1) # Red circle
+
+                # Display coordinates
+                cv2.putText(frame, f"X: {cX}, Y: {cY}", (cX - 50, cY - 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+                print(f"Object detected at: X={cX}, Y={cY}")
+            else:
+                print("no contour found, small objec.")
+        else:
+            print("Object possibly too big.")
+    else:
+        print("No object with selected color.")
+
+    cv2.imshow("Original Frame", frame)
+    cv2.imshow("Color Mask", mask)
+    
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release() 
+cv2.destroyAllWindows() 
